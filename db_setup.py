@@ -14,27 +14,27 @@ def initialize_db(db_name, sql_file):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-def insert_data(db_name, sql_file):
-    try:
-        conn = sqlite3.connect(db_name)
-        with open(sql_file, 'r') as file:
-            sql_script = file.read()
-            conn.executescript(sql_script)
-            print("Data inserted successfully from insert.sql")
-        conn.close()
-    except Exception as e:
-        print(f"An error occurred during insertion: {e}")
+# def insert_data(db_name, sql_file):
+#     try:
+#         conn = sqlite3.connect(db_name)
+#         with open(sql_file, 'r') as file:
+#             sql_script = file.read()
+#             conn.executescript(sql_script)
+#             print("Data inserted successfully from insert.sql")
+#         conn.close()
+#     except Exception as e:
+#         print(f"An error occurred during insertion: {e}")
 
-def perform_crud(db_name, sql_file):
-    try:
-        conn = sqlite3.connect(db_name)
-        with open(sql_file, 'r') as file:
-            sql_script = file.read()
-            conn.executescript(sql_script)
-            print("CRUD operations performed successfully from crud.sql")
-        conn.close()
-    except Exception as e:
-        print(f"An error occurred during CRUD operations: {e}")
+# def perform_crud(db_name, sql_file):
+#     try:
+#         conn = sqlite3.connect(db_name)
+#         with open(sql_file, 'r') as file:
+#             sql_script = file.read()
+#             conn.executescript(sql_script)
+#             print("CRUD operations performed successfully from crud.sql")
+#         conn.close()
+#     except Exception as e:
+#         print(f"An error occurred during CRUD operations: {e}")
 
 if __name__ == "__main__":
     initialize_db("music_service.db", "create.sql")

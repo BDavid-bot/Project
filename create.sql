@@ -27,11 +27,13 @@ CREATE TABLE IF NOT EXISTS Albums (
 );
 
 -- Songs Table
--- Functional Dependency: SongID → Title, Duration, AlbumID
+-- Functional Dependency: SongID → Title, Duration, AlbumID, ArtistID
 CREATE TABLE IF NOT EXISTS Songs (
     SongID INTEGER PRIMARY KEY AUTOINCREMENT,
     Title TEXT NOT NULL,
     Duration INTEGER,
     AlbumID INTEGER,
-    FOREIGN KEY (AlbumID) REFERENCES Albums(AlbumID) ON DELETE CASCADE
+    ArtistID INTEGER,
+    FOREIGN KEY (AlbumID) REFERENCES Albums(AlbumID) ON DELETE CASCADE,
+    FOREIGN KEY (ArtistID) REFERENCES Artists(ArtistID) ON DELETE CASCADE
 );
