@@ -1,0 +1,16 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# SQLite database files
+*.db
+*.sqlite3
+
+# Local config files
+config.json
+
+# VSCode settings (optional)
+.vscode/
+
+# Music Folder / Files
+/music/
