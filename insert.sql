@@ -7,6 +7,6 @@ INSERT INTO Albums (AlbumID, Title, ReleaseDate, ArtistID) VALUES (1, 'Minecraft
 INSERT INTO Albums (AlbumID, Title, ReleaseDate, ArtistID) VALUES (2, 'Minecraft: Tricky Trials (Original Game Soundtrack)', '2024-04-26', 2);
 
 -- Inserting into Songs Table
-INSERT INTO Songs (Title, Duration, AlbumID) VALUES ('Infinite Amethyst', 271, 1);
-INSERT INTO Songs (Title, Duration, AlbumID) VALUES ('otherside', 195, 1);
-INSERT INTO Songs (Title, Duration, AlbumID) VALUES ('Precipice', 299, 2);
+INSERT INTO Songs (Title, Duration, AlbumID, ArtistID) VALUES ('Infinite Amethyst', 271, 1, 1);
+INSERT INTO Songs (Title, Duration, AlbumID, ArtistID) VALUES ('otherside', 195, 1, 1);
+INSERT INTO Songs (Title, Duration, AlbumID, ArtistID) VALUES ('Precipice', 299, 2, 2);

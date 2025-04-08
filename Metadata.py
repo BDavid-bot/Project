@@ -77,7 +77,9 @@ def scan_music_folder_and_generate_sql(music_path):
                     songs.append({
                         "title": metadata["title"],
                         "duration": metadata["duration"],
-                        "album_id": albums[album_key]["id"]
+                        "album_id": albums[album_key]["id"],
+                        "album_title": metadata["album"],
+                        "artist_name": artist_name  # Add artist name for reference
                     })
 
     return generate_insert_sql(artists, albums, songs)
@@ -104,9 +106,13 @@ def generate_insert_sql(artists, albums, songs):
     # Songs
     lines.append("\n-- Inserting into Songs Table")
     for song in songs:
+        # Add the ArtistID here, which can be found in the albums dictionary based on the album_id
+        album_id = song['album_id']
+        artist_id = albums[(song['album_title'], song['artist_name'])]['artist_id']  # Retrieve the ArtistID from the album
+
         lines.append(
-            f"INSERT INTO Songs (Title, Duration, AlbumID) VALUES "
-            f"('{song['title'].replace("'", "''")}', {song['duration']}, {song['album_id']});"
+            f"INSERT INTO Songs (Title, Duration, AlbumID, ArtistID) VALUES "
+            f"('{song['title'].replace("'", "''")}', {song['duration']}, {album_id}, {artist_id});"
         )
 
     return "\n".join(lines)

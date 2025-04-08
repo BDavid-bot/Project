@@ -16,4 +16,4 @@ config.json
 /music/
 
 # Database
-music_database.db
+music_service.db
