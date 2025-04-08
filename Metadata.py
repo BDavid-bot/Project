@@ -9,7 +9,7 @@ def read_config():
         with open("config.json", "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        print("⚠️  config.json not found!")
+        print("config.json not found!")
         return {}
 
 def safe_str(tag):
@@ -106,7 +106,6 @@ def generate_insert_sql(artists, albums, songs):
     # Songs
     lines.append("\n-- Inserting into Songs Table")
     for song in songs:
-        # Add the ArtistID here, which can be found in the albums dictionary based on the album_id
         album_id = song['album_id']
         artist_id = albums[(song['album_title'], song['artist_name'])]['artist_id']  # Retrieve the ArtistID from the album
 
@@ -121,9 +120,9 @@ def save_insert_sql(content, output_path="insert.sql"):
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
-        print(f"✅ insert.sql written with generated SQL statements.")
+        print(f"insert.sql written with generated SQL statements.")
     except Exception as e:
-        print(f"❌ Failed to write insert.sql: {e}")
+        print(f"Failed to write insert.sql: {e}")
 
 if __name__ == "__main__":
     config = read_config()
@@ -133,4 +132,4 @@ if __name__ == "__main__":
         sql_content = scan_music_folder_and_generate_sql(music_path)
         save_insert_sql(sql_content)
     else:
-        print("Invalid or missing music_path in config.json.")
+        print("Invalid or missing music path in config.json.")

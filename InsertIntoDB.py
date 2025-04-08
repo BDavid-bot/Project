@@ -6,12 +6,12 @@ def read_config():
         with open("config.json", "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        print("⚠️  config.json not found!")
+        print("config.json not found!")
         return {}
 
 def execute_insert_sql(sql_file_path, db_path):
     if not os.path.exists(sql_file_path):
-        print(f"⚠️ The file '{sql_file_path}' does not exist!")
+        print(f"The file '{sql_file_path}' does not exist!")
         return
 
     try:
@@ -25,10 +25,10 @@ def execute_insert_sql(sql_file_path, db_path):
         conn.commit()
         conn.close()
 
-        print("✅ insert.sql executed successfully.")
+        print("insert.sql executed successfully.")
 
     except Exception as e:
-        print(f"❌ Error executing insert.sql: {e}")
+        print(f"Error executing insert.sql: {e}")
 
 if __name__ == "__main__":
     import json
