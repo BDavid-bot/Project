@@ -18,5 +18,7 @@ config.json
 # Database
 music_service.db
 
-# Insert.sql
+# Insert.sql & crud.sql
 insert.sql
+crud.sql
+
