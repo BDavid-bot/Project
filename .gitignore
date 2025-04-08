@@ -14,3 +14,6 @@ config.json
 
 # Music Folder / Files
 /music/
+
+# Database
+music_database.db
