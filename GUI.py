@@ -1,8 +1,10 @@
 import sys
+import os
 import sqlite3
+import subprocess
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QTabWidget, QTableView,
-    QLabel, QPushButton, QHBoxLayout
+    QPushButton, QLabel
 )
 from PyQt5.QtSql import QSqlDatabase, QSqlTableModel
 
@@ -13,56 +15,116 @@ class MusicLibraryApp(QWidget):
         self.setWindowTitle("Music Library")
         self.setGeometry(100, 100, 800, 600)
 
+        self.db_path = "music_service.db"
         self.init_db()
         self.init_ui()
 
     def init_db(self):
-        self.db_path = "music_service.db"
         self.db = QSqlDatabase.addDatabase("QSQLITE")
         self.db.setDatabaseName(self.db_path)
         if not self.db.open():
             print("Failed to connect to database.")
             sys.exit(1)
 
-    def get_summary_counts(self):
+    def reset_database(self):
+        print("Resetting database...")
+
+        self.db.close()
+        QSqlDatabase.removeDatabase("qt_sql_default_connection")
+
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+
         try:
+            with open("create.sql", "r") as f:
+                create_sql = f.read()
+
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM Songs")
-            song_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM Artists")
-            artist_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM Albums")
-            album_count = cursor.fetchone()[0]
+            cursor.executescript(create_sql)
+            conn.commit()
             conn.close()
-            return song_count, artist_count, album_count
+            print("Database reset successfully.")
         except Exception as e:
-            print(f"Error retrieving summary stats: {e}")
-            return 0, 0, 0
+            print(f"Error resetting database: {e}")
+            return
+
+        self.init_db()
+        self.refresh_models()
+
+    def sync_music_data(self):
+        try:
+            print("Running Metadata.py...")
+            subprocess.run(["python", "Metadata.py"], check=True)
+
+            print("Running InsertIntoDB.py...")
+            subprocess.run(["python", "InsertIntoDB.py"], check=True)
+
+            # Clear insert.sql after execution
+            with open("insert.sql", "w") as f:
+                f.truncate(0)  # Clear the file content
+            print("insert.sql cleared.")
+
+            self.refresh_models()
+            print("Music data synced successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error running script: {e}")
+
+    def sync_users_data(self):
+        try:
+            print("Running users.py...")
+            subprocess.run(["python", "users.py"], check=True)
+
+            print("Running InsertIntoDB.py...")
+            subprocess.run(["python", "InsertIntoDB.py"], check=True)
+
+            # Clear insert.sql after execution
+            with open("insert.sql", "w") as f:
+                f.truncate(0)  # Clear the file content
+            print("insert.sql cleared.")
+
+            self.refresh_models()
+            print("Users data synced successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error running script: {e}")
+
+    def refresh_models(self):
+        self.songs_model.select()
+        self.artists_model.select()
+        self.albums_model.select()
+        self.users_model.select()
 
     def init_ui(self):
         layout = QVBoxLayout()
         self.tabs = QTabWidget()
 
-        # Main tab with summary stats
+        # Main tab
         main_tab = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(1)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        song_count, artist_count, album_count = self.get_summary_counts()
-        main_layout.addWidget(QLabel(f"Songs: {song_count}"))
-        main_layout.addWidget(QLabel(f"Artists: {artist_count}"))
-        main_layout.addWidget(QLabel(f"Albums: {album_count}"))
+        reset_button = QPushButton("Reset Database")
+        reset_button.clicked.connect(self.reset_database)
+
+        sync_music_button = QPushButton("Sync Music Data")
+        sync_music_button.clicked.connect(self.sync_music_data)
+
+        sync_users_button = QPushButton("Sync Users Data")
+        sync_users_button.clicked.connect(self.sync_users_data)
+
+        main_layout.addWidget(reset_button)
+        main_layout.addWidget(sync_music_button)
+        main_layout.addWidget(sync_users_button)
 
         main_tab.setLayout(main_layout)
         self.tabs.insertTab(0, main_tab, "Main")
 
         # Table views
-        self.songs_view = self.create_table_view("Songs")
-        self.artists_view = self.create_table_view("Artists")
-        self.albums_view = self.create_table_view("Albums")
-        self.users_view, users_tab = self.create_users_tab()
+        self.songs_view, self.songs_model = self.create_table_view("Songs")
+        self.artists_view, self.artists_model = self.create_table_view("Artists")
+        self.albums_view, self.albums_model = self.create_table_view("Albums")
+        self.users_view, self.users_model, users_tab = self.create_users_tab()
 
         self.tabs.addTab(self.songs_view, "Songs")
         self.tabs.addTab(self.artists_view, "Artists")
@@ -80,18 +142,17 @@ class MusicLibraryApp(QWidget):
         view = QTableView()
         view.setModel(model)
         view.resizeColumnsToContents()
-        return view
+        return view, model
 
     def create_users_tab(self):
         layout = QVBoxLayout()
-        self.users_model = QSqlTableModel(self)
-        self.users_model.setTable("Users")
-        self.users_model.select()
+        model = QSqlTableModel(self)
+        model.setTable("Users")
+        model.select()
 
         users_view = QTableView()
-        users_view.setModel(self.users_model)
+        users_view.setModel(model)
         users_view.resizeColumnsToContents()
-        self.users_view_ref = users_view  # store reference for deletion
 
         delete_button = QPushButton("Delete User")
         delete_button.clicked.connect(lambda: self.delete_selected_row(users_view))
@@ -101,7 +162,7 @@ class MusicLibraryApp(QWidget):
 
         container = QWidget()
         container.setLayout(layout)
-        return users_view, container
+        return users_view, model, container
 
     def delete_selected_row(self, view):
         model = view.model()
@@ -113,7 +174,7 @@ class MusicLibraryApp(QWidget):
             if not model.submitAll():
                 print("Failed to submit deletion.")
             else:
-                model.select()  # Refresh view
+                model.select()
         else:
             print("No row selected for deletion.")
 
