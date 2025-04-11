@@ -1,9 +1,11 @@
 import sys
 import sqlite3
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QTabWidget, QTableView, QLabel
+    QApplication, QWidget, QVBoxLayout, QTabWidget, QTableView,
+    QLabel, QPushButton, QHBoxLayout
 )
 from PyQt5.QtSql import QSqlDatabase, QSqlTableModel
+
 
 class MusicLibraryApp(QWidget):
     def __init__(self):
@@ -46,7 +48,7 @@ class MusicLibraryApp(QWidget):
         main_tab = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setSpacing(1)
-        main_layout.setContentsMargins(0,0,0,0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
         song_count, artist_count, album_count = self.get_summary_counts()
         main_layout.addWidget(QLabel(f"Songs: {song_count}"))
@@ -60,10 +62,12 @@ class MusicLibraryApp(QWidget):
         self.songs_view = self.create_table_view("Songs")
         self.artists_view = self.create_table_view("Artists")
         self.albums_view = self.create_table_view("Albums")
+        self.users_view, users_tab = self.create_users_tab()
 
         self.tabs.addTab(self.songs_view, "Songs")
         self.tabs.addTab(self.artists_view, "Artists")
         self.tabs.addTab(self.albums_view, "Albums")
+        self.tabs.addTab(users_tab, "Users")
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
@@ -77,6 +81,42 @@ class MusicLibraryApp(QWidget):
         view.setModel(model)
         view.resizeColumnsToContents()
         return view
+
+    def create_users_tab(self):
+        layout = QVBoxLayout()
+        self.users_model = QSqlTableModel(self)
+        self.users_model.setTable("Users")
+        self.users_model.select()
+
+        users_view = QTableView()
+        users_view.setModel(self.users_model)
+        users_view.resizeColumnsToContents()
+        self.users_view_ref = users_view  # store reference for deletion
+
+        delete_button = QPushButton("Delete User")
+        delete_button.clicked.connect(lambda: self.delete_selected_row(users_view))
+
+        layout.addWidget(users_view)
+        layout.addWidget(delete_button)
+
+        container = QWidget()
+        container.setLayout(layout)
+        return users_view, container
+
+    def delete_selected_row(self, view):
+        model = view.model()
+        selected_indexes = view.selectionModel().selectedRows()
+
+        if selected_indexes:
+            for index in selected_indexes:
+                model.removeRow(index.row())
+            if not model.submitAll():
+                print("Failed to submit deletion.")
+            else:
+                model.select()  # Refresh view
+        else:
+            print("No row selected for deletion.")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
