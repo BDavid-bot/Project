@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import json
 
 def read_config():
     try:
@@ -31,7 +32,6 @@ def execute_insert_sql(sql_file_path, db_path):
         print(f"Error executing insert.sql: {e}")
 
 if __name__ == "__main__":
-    import json
     config = read_config()
     db_path = config.get("database_path", "music_service.db")
     sql_file_path = "insert.sql"

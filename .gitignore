@@ -8,6 +8,7 @@ __pycache__/
 
 # Local config files
 config.json
+users.json
 
 # VSCode settings (optional)
 .vscode/
@@ -15,7 +16,7 @@ config.json
 # Music Folder / Files
 /music/
 
-# Database
+# Database 
 music_service.db
 
 # Insert.sql & crud.sql
