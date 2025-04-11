@@ -2,9 +2,10 @@ import sys
 import os
 import sqlite3
 import subprocess
+import json
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QTabWidget, QTableView,
-    QPushButton, QLabel
+    QPushButton, QLabel, QDialog, QLineEdit, QFormLayout
 )
 from PyQt5.QtSql import QSqlDatabase, QSqlTableModel
 
@@ -157,8 +158,12 @@ class MusicLibraryApp(QWidget):
         delete_button = QPushButton("Delete User")
         delete_button.clicked.connect(lambda: self.delete_selected_row(users_view))
 
+        add_user_button = QPushButton("Add User")
+        add_user_button.clicked.connect(self.add_user_popup)
+
         layout.addWidget(users_view)
         layout.addWidget(delete_button)
+        layout.addWidget(add_user_button)
 
         container = QWidget()
         container.setLayout(layout)
@@ -177,6 +182,64 @@ class MusicLibraryApp(QWidget):
                 model.select()
         else:
             print("No row selected for deletion.")
+
+    def add_user_popup(self):
+        # Popup to add new user
+        self.dialog = QDialog(self)
+        self.dialog.setWindowTitle("Add New User")
+
+        form_layout = QFormLayout()
+        self.username_input = QLineEdit()
+        self.email_input = QLineEdit()
+
+        form_layout.addRow("Username:", self.username_input)
+        form_layout.addRow("Email:", self.email_input)
+
+        submit_button = QPushButton("Submit")
+        submit_button.clicked.connect(self.add_new_user)
+        form_layout.addRow(submit_button)
+
+        self.dialog.setLayout(form_layout)
+        self.dialog.exec_()
+
+    def add_new_user(self):
+        # Get user input from popup
+        username = self.username_input.text()
+        email = self.email_input.text()
+
+        if not username or not email:
+            print("Username and Email cannot be empty.")
+            return
+
+        # Insert the user into the database
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO Users (Username, Email, JoinDate) VALUES (?, ?, ?)",
+                       (username, email, "2025-04-11"))  # Use current date or timestamp
+        conn.commit()
+
+        # Get the new user data and update users.json
+        new_user = {"UserID": cursor.lastrowid, "Username": username, "Email": email, "JoinDate": "2025-04-11"}
+        self.add_user_to_json(new_user)
+
+        # Close dialog and refresh users table
+        self.dialog.accept()
+        self.users_view.model().select()
+
+    def add_user_to_json(self, new_user):
+        # Read the current users from users.json
+        try:
+            with open("users.json", "r", encoding="utf-8") as f:
+                users = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            users = []
+
+        # Append the new user to the list
+        users.append(new_user)
+
+        # Write the updated list back to users.json
+        with open("users.json", "w", encoding="utf-8") as f:
+            json.dump(users, f, indent=4)
 
 
 if __name__ == "__main__":
