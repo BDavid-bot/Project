@@ -2,10 +2,9 @@ import sys
 import os
 import sqlite3
 import subprocess
-import json
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QTabWidget, QTableView,
-    QPushButton, QLabel, QDialog, QLineEdit, QFormLayout, QHBoxLayout
+    QPushButton, QLabel, QComboBox, QDialog, QFormLayout, QLineEdit, QDialogButtonBox
 )
 from PyQt5.QtSql import QSqlDatabase, QSqlTableModel
 
@@ -124,11 +123,13 @@ class MusicLibraryApp(QWidget):
         self.artists_view, self.artists_model = self.create_table_view("Artists")
         self.albums_view, self.albums_model = self.create_table_view("Albums")
         self.users_view, self.users_model, users_tab = self.create_users_tab()
+        search_tab = self.create_search_tab()
 
         self.tabs.addTab(self.songs_view, "Songs")
         self.tabs.addTab(self.artists_view, "Artists")
         self.tabs.addTab(self.albums_view, "Albums")
         self.tabs.addTab(users_tab, "Users")
+        self.tabs.addTab(search_tab, "Search")
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
@@ -153,18 +154,18 @@ class MusicLibraryApp(QWidget):
         users_view.setModel(model)
         users_view.resizeColumnsToContents()
 
-        add_button = QPushButton("Add User")
-        add_button.clicked.connect(self.add_user_dialog)
-
         delete_button = QPushButton("Delete User")
         delete_button.clicked.connect(lambda: self.delete_selected_row(users_view))
 
-        edit_button = QPushButton("Edit User")
-        edit_button.clicked.connect(lambda: self.edit_selected_user(users_view))
+        add_button = QPushButton("Add User")
+        add_button.clicked.connect(self.open_add_user_dialog)
+
+        edit_button = QPushButton("Edit Selected User")
+        edit_button.clicked.connect(lambda: self.open_edit_user_dialog(users_view))
 
         layout.addWidget(users_view)
-        layout.addWidget(add_button)
         layout.addWidget(delete_button)
+        layout.addWidget(add_button)
         layout.addWidget(edit_button)
 
         container = QWidget()
@@ -185,7 +186,50 @@ class MusicLibraryApp(QWidget):
         else:
             print("No row selected for deletion.")
 
-    def edit_selected_user(self, view):
+    def open_add_user_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add New User")
+
+        layout = QFormLayout(dialog)
+        username_input = QLineEdit()
+        email_input = QLineEdit()
+
+        layout.addRow("Username:", username_input)
+        layout.addRow("Email:", email_input)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+
+        buttons.accepted.connect(lambda: self.add_user(username_input.text(), email_input.text(), dialog))
+        buttons.rejected.connect(dialog.reject)
+
+        dialog.exec_()
+
+    def add_user(self, username, email, dialog):
+        import json
+        from datetime import datetime
+
+        new_user = {
+            "username": username,
+            "email": email,
+            "join_date": datetime.now().strftime("%Y-%m-%d")
+        }
+
+        try:
+            with open("users.json", "r") as f:
+                users = json.load(f)
+        except FileNotFoundError:
+            users = []
+
+        users.append(new_user)
+
+        with open("users.json", "w") as f:
+            json.dump(users, f, indent=2)
+
+        self.sync_users_data()
+        dialog.accept()
+
+    def open_edit_user_dialog(self, view):
         model = view.model()
         selected_indexes = view.selectionModel().selectedRows()
 
@@ -193,96 +237,107 @@ class MusicLibraryApp(QWidget):
             print("No user selected for editing.")
             return
 
-        index = selected_indexes[0]
-        row = index.row()
-        user_id = model.data(model.index(row, 0))
-        current_username = model.data(model.index(row, 1))
-        current_email = model.data(model.index(row, 2))
+        selected_row = selected_indexes[0].row()
+        user_id = model.data(model.index(selected_row, 0))
+        current_username = model.data(model.index(selected_row, 1))
+        current_email = model.data(model.index(selected_row, 2))
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Edit User")
 
-        form = QFormLayout()
+        layout = QFormLayout(dialog)
         username_input = QLineEdit(current_username)
         email_input = QLineEdit(current_email)
-        form.addRow("Username:", username_input)
-        form.addRow("Email:", email_input)
 
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(lambda: self.save_user_changes(dialog, model, row, user_id, username_input.text(), email_input.text()))
+        layout.addRow("Username:", username_input)
+        layout.addRow("Email:", email_input)
 
-        form.addWidget(save_button)
-        dialog.setLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+
+        def save_changes():
+            new_username = username_input.text()
+            new_email = email_input.text()
+
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE Users SET username = ?, email = ? WHERE UserID = ?", (new_username, new_email, user_id))
+            conn.commit()
+            conn.close()
+
+            self.refresh_models()
+            dialog.accept()
+
+        buttons.accepted.connect(save_changes)
+        buttons.rejected.connect(dialog.reject)
+
         dialog.exec_()
 
-    def save_user_changes(self, dialog, model, row, user_id, new_username, new_email):
-        model.setData(model.index(row, 1), new_username)
-        model.setData(model.index(row, 2), new_email)
-        if model.submitAll():
-            print("User info updated in DB.")
-            self.update_users_json(user_id, new_username, new_email)
-        else:
-            print("Failed to update DB.")
-        dialog.accept()
-        model.select()
+    def create_search_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
 
-    def update_users_json(self, user_id, new_username, new_email):
+        self.search_combo = QComboBox()
+        self.search_table = QTableView()
+
         try:
-            with open("users.json", "r") as f:
-                users = json.load(f)
-        except FileNotFoundError:
-            users = []
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM Artists")
+            artist_names = [row[0] for row in cursor.fetchall()]
+            conn.close()
+        except Exception as e:
+            print(f"Error fetching artist names: {e}")
+            artist_names = []
 
-        for user in users:
-            if user.get("UserID") == user_id:
-                user["username"] = new_username
-                user["email"] = new_email
-                break
+        self.search_combo.addItems(artist_names)
+        search_button = QPushButton("Search Songs by Artist")
+        search_button.clicked.connect(self.load_songs_by_artist)
 
-        with open("users.json", "w") as f:
-            json.dump(users, f, indent=4)
-        print("users.json updated.")
+        layout.addWidget(QLabel("Select Artist:"))
+        layout.addWidget(self.search_combo)
+        layout.addWidget(search_button)
+        layout.addWidget(self.search_table)
 
-    def add_user_dialog(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Add User")
+        tab.setLayout(layout)
+        return tab
 
-        form = QFormLayout()
-        username_input = QLineEdit()
-        email_input = QLineEdit()
-        form.addRow("Username:", username_input)
-        form.addRow("Email:", email_input)
+    def load_songs_by_artist(self):
+        selected_artist = self.search_combo.currentText()
 
-        save_button = QPushButton("Add")
-        save_button.clicked.connect(lambda: self.add_user(dialog, username_input.text(), email_input.text()))
-        form.addWidget(save_button)
-
-        dialog.setLayout(form)
-        dialog.exec_()
-
-    def add_user(self, dialog, username, email):
         try:
-            with open("users.json", "r") as f:
-                users = json.load(f)
-        except FileNotFoundError:
-            users = []
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
 
-        existing_ids = [user["UserID"] for user in users]
-        new_id = max(existing_ids) + 1 if existing_ids else 1
+            query = f"""
+            SELECT Songs.Title, Albums.Title AS Album, Songs.Duration
+            FROM Songs
+            JOIN Albums ON Songs.AlbumID = Albums.AlbumID
+            JOIN Artists ON Albums.ArtistID = Artists.ArtistID
+            WHERE Artists.Name = '{selected_artist}';
+            """
 
-        new_user = {
-            "UserID": new_id,
-            "username": username,
-            "email": email,
-            "join_date": "04-12-2025"
-        }
-        users.append(new_user)
+            with open("crud.sql", "w") as f:
+                f.write(query)
 
-        with open("users.json", "w") as f:
-            json.dump(users, f, indent=4)
+            cursor.execute(query)
+            results = cursor.fetchall()
+            conn.close()
 
-        print("New user added to users.json.")
-        dialog.accept()
+            from PyQt5.QtGui import QStandardItemModel, QStandardItem
+            model = QStandardItemModel()
+            model.setHorizontalHeaderLabels(["Title", "Album", "Duration (sec)"])
+            for row in results:
+                items = [QStandardItem(str(field)) for field in row]
+                model.appendRow(items)
+            self.search_table.setModel(model)
+            self.search_table.resizeColumnsToContents()
+
+            with open("crud.sql", "w") as f:
+                f.truncate(0)
+
+        except Exception as e:
+            print(f"Error loading songs: {e}")
 
 
 if __name__ == "__main__":
