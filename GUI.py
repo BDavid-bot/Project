@@ -5,7 +5,7 @@ import subprocess
 import json
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QTabWidget, QTableView,
-    QPushButton, QLabel, QDialog, QLineEdit, QFormLayout
+    QPushButton, QLabel, QDialog, QLineEdit, QFormLayout, QHBoxLayout
 )
 from PyQt5.QtSql import QSqlDatabase, QSqlTableModel
 
@@ -61,9 +61,8 @@ class MusicLibraryApp(QWidget):
             print("Running InsertIntoDB.py...")
             subprocess.run(["python", "InsertIntoDB.py"], check=True)
 
-            # Clear insert.sql after execution
             with open("insert.sql", "w") as f:
-                f.truncate(0)  # Clear the file content
+                f.truncate(0)
             print("insert.sql cleared.")
 
             self.refresh_models()
@@ -79,9 +78,8 @@ class MusicLibraryApp(QWidget):
             print("Running InsertIntoDB.py...")
             subprocess.run(["python", "InsertIntoDB.py"], check=True)
 
-            # Clear insert.sql after execution
             with open("insert.sql", "w") as f:
-                f.truncate(0)  # Clear the file content
+                f.truncate(0)
             print("insert.sql cleared.")
 
             self.refresh_models()
@@ -155,15 +153,19 @@ class MusicLibraryApp(QWidget):
         users_view.setModel(model)
         users_view.resizeColumnsToContents()
 
+        add_button = QPushButton("Add User")
+        add_button.clicked.connect(self.add_user_dialog)
+
         delete_button = QPushButton("Delete User")
         delete_button.clicked.connect(lambda: self.delete_selected_row(users_view))
 
-        add_user_button = QPushButton("Add User")
-        add_user_button.clicked.connect(self.add_user_popup)
+        edit_button = QPushButton("Edit User")
+        edit_button.clicked.connect(lambda: self.edit_selected_user(users_view))
 
         layout.addWidget(users_view)
+        layout.addWidget(add_button)
         layout.addWidget(delete_button)
-        layout.addWidget(add_user_button)
+        layout.addWidget(edit_button)
 
         container = QWidget()
         container.setLayout(layout)
@@ -183,63 +185,104 @@ class MusicLibraryApp(QWidget):
         else:
             print("No row selected for deletion.")
 
-    def add_user_popup(self):
-        # Popup to add new user
-        self.dialog = QDialog(self)
-        self.dialog.setWindowTitle("Add New User")
+    def edit_selected_user(self, view):
+        model = view.model()
+        selected_indexes = view.selectionModel().selectedRows()
 
-        form_layout = QFormLayout()
-        self.username_input = QLineEdit()
-        self.email_input = QLineEdit()
-
-        form_layout.addRow("Username:", self.username_input)
-        form_layout.addRow("Email:", self.email_input)
-
-        submit_button = QPushButton("Submit")
-        submit_button.clicked.connect(self.add_new_user)
-        form_layout.addRow(submit_button)
-
-        self.dialog.setLayout(form_layout)
-        self.dialog.exec_()
-
-    def add_new_user(self):
-        # Get user input from popup
-        username = self.username_input.text()
-        email = self.email_input.text()
-
-        if not username or not email:
-            print("Username and Email cannot be empty.")
+        if not selected_indexes:
+            print("No user selected for editing.")
             return
 
-        # Insert the user into the database
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO Users (Username, Email, JoinDate) VALUES (?, ?, ?)",
-                       (username, email, "2025-04-11"))  # Use current date or timestamp
-        conn.commit()
+        index = selected_indexes[0]
+        row = index.row()
+        user_id = model.data(model.index(row, 0))
+        current_username = model.data(model.index(row, 1))
+        current_email = model.data(model.index(row, 2))
 
-        # Get the new user data and update users.json
-        new_user = {"UserID": cursor.lastrowid, "Username": username, "Email": email, "JoinDate": "2025-04-11"}
-        self.add_user_to_json(new_user)
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Edit User")
 
-        # Close dialog and refresh users table
-        self.dialog.accept()
-        self.users_view.model().select()
+        form = QFormLayout()
+        username_input = QLineEdit(current_username)
+        email_input = QLineEdit(current_email)
+        form.addRow("Username:", username_input)
+        form.addRow("Email:", email_input)
 
-    def add_user_to_json(self, new_user):
-        # Read the current users from users.json
+        save_button = QPushButton("Save")
+        save_button.clicked.connect(lambda: self.save_user_changes(dialog, model, row, user_id, username_input.text(), email_input.text()))
+
+        form.addWidget(save_button)
+        dialog.setLayout(form)
+        dialog.exec_()
+
+    def save_user_changes(self, dialog, model, row, user_id, new_username, new_email):
+        model.setData(model.index(row, 1), new_username)
+        model.setData(model.index(row, 2), new_email)
+        if model.submitAll():
+            print("User info updated in DB.")
+            self.update_users_json(user_id, new_username, new_email)
+        else:
+            print("Failed to update DB.")
+        dialog.accept()
+        model.select()
+
+    def update_users_json(self, user_id, new_username, new_email):
         try:
-            with open("users.json", "r", encoding="utf-8") as f:
+            with open("users.json", "r") as f:
                 users = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError:
             users = []
 
-        # Append the new user to the list
+        for user in users:
+            if user.get("UserID") == user_id:
+                user["username"] = new_username
+                user["email"] = new_email
+                break
+
+        with open("users.json", "w") as f:
+            json.dump(users, f, indent=4)
+        print("users.json updated.")
+
+    def add_user_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add User")
+
+        form = QFormLayout()
+        username_input = QLineEdit()
+        email_input = QLineEdit()
+        form.addRow("Username:", username_input)
+        form.addRow("Email:", email_input)
+
+        save_button = QPushButton("Add")
+        save_button.clicked.connect(lambda: self.add_user(dialog, username_input.text(), email_input.text()))
+        form.addWidget(save_button)
+
+        dialog.setLayout(form)
+        dialog.exec_()
+
+    def add_user(self, dialog, username, email):
+        try:
+            with open("users.json", "r") as f:
+                users = json.load(f)
+        except FileNotFoundError:
+            users = []
+
+        existing_ids = [user["UserID"] for user in users]
+        new_id = max(existing_ids) + 1 if existing_ids else 1
+
+        new_user = {
+            "UserID": new_id,
+            "username": username,
+            "email": email,
+            "join_date": "04-12-2025"
+        }
         users.append(new_user)
 
-        # Write the updated list back to users.json
-        with open("users.json", "w", encoding="utf-8") as f:
+        with open("users.json", "w") as f:
             json.dump(users, f, indent=4)
+
+        print("New user added to users.json.")
+        dialog.accept()
 
 
 if __name__ == "__main__":
