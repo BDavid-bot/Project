@@ -69,23 +69,6 @@ class MusicLibraryApp(QWidget):
         except subprocess.CalledProcessError as e:
             print(f"Error running script: {e}")
 
-    def sync_users_data(self):
-        try:
-            print("Running users.py...")
-            subprocess.run(["python", "users.py"], check=True)
-
-            print("Running InsertIntoDB.py...")
-            subprocess.run(["python", "InsertIntoDB.py"], check=True)
-
-            with open("insert.sql", "w") as f:
-                f.truncate(0)
-            print("insert.sql cleared.")
-
-            self.refresh_models()
-            print("Users data synced successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error running script: {e}")
-
     def refresh_models(self):
         self.songs_model.select()
         self.artists_model.select()
@@ -108,12 +91,8 @@ class MusicLibraryApp(QWidget):
         sync_music_button = QPushButton("Sync Music Data")
         sync_music_button.clicked.connect(self.sync_music_data)
 
-        sync_users_button = QPushButton("Sync Users Data")
-        sync_users_button.clicked.connect(self.sync_users_data)
-
         main_layout.addWidget(reset_button)
         main_layout.addWidget(sync_music_button)
-        main_layout.addWidget(sync_users_button)
 
         main_tab.setLayout(main_layout)
         self.tabs.insertTab(0, main_tab, "Main")
@@ -206,27 +185,29 @@ class MusicLibraryApp(QWidget):
         dialog.exec_()
 
     def add_user(self, username, email, dialog):
-        import json
         from datetime import datetime
 
         new_user = {
-            "username": username,
-            "email": email,
-            "join_date": datetime.now().strftime("%Y-%m-%d")
+            "Username": username,
+            "Email": email,
+            "JoinDate": datetime.now().strftime("%Y-%m-%d")
         }
 
+        # Add the user directly to the database
         try:
-            with open("users.json", "r") as f:
-                users = json.load(f)
-        except FileNotFoundError:
-            users = []
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO Users (username, email, JoinDate) VALUES (?, ?, ?)", 
+                           (username, email, new_user["JoinDate"]))
+            conn.commit()
+            conn.close()
 
-        users.append(new_user)
+            self.refresh_models()
+            print("User added to the database.")
 
-        with open("users.json", "w") as f:
-            json.dump(users, f, indent=2)
+        except Exception as e:
+            print(f"Error adding user: {e}")
 
-        self.sync_users_data()
         dialog.accept()
 
     def open_edit_user_dialog(self, view):
@@ -261,7 +242,8 @@ class MusicLibraryApp(QWidget):
 
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("UPDATE Users SET username = ?, email = ? WHERE UserID = ?", (new_username, new_email, user_id))
+            cursor.execute("UPDATE Users SET username = ?, email = ? WHERE UserID = ?", 
+                           (new_username, new_email, user_id))
             conn.commit()
             conn.close()
 
@@ -317,9 +299,6 @@ class MusicLibraryApp(QWidget):
             WHERE Artists.Name = '{selected_artist}';
             """
 
-            with open("crud.sql", "w") as f:
-                f.write(query)
-
             cursor.execute(query)
             results = cursor.fetchall()
             conn.close()
@@ -332,9 +311,6 @@ class MusicLibraryApp(QWidget):
                 model.appendRow(items)
             self.search_table.setModel(model)
             self.search_table.resizeColumnsToContents()
-
-            with open("crud.sql", "w") as f:
-                f.truncate(0)
 
         except Exception as e:
             print(f"Error loading songs: {e}")
