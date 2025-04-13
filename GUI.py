@@ -212,7 +212,7 @@ class MusicLibraryApp(QWidget):
         # Add user directly to the database
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO Users (username, email, join_date) VALUES (?, ?, ?)",
+        cursor.execute("INSERT INTO Users (Username, Email, JoinDate) VALUES (?, ?, ?)",
                        (username, email, new_user["JoinDate"]))
         conn.commit()
         conn.close()
