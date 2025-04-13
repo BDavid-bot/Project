@@ -75,6 +75,19 @@ class MusicLibraryApp(QWidget):
         self.albums_model.select()
         self.users_model.select()
 
+    def refresh_artist_names(self):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM Artists")
+            artist_names = [row[0] for row in cursor.fetchall()]
+            conn.close()
+
+            self.search_combo.clear()  # Clear existing items
+            self.search_combo.addItems(artist_names)  # Add new artist names
+        except Exception as e:
+            print(f"Error fetching artist names: {e}")
+
     def init_ui(self):
         layout = QVBoxLayout()
         self.tabs = QTabWidget()
@@ -112,6 +125,9 @@ class MusicLibraryApp(QWidget):
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
+
+        # Connect the tab change event to refresh the search combo box
+        self.tabs.currentChanged.connect(self.on_tab_changed)
 
     def create_table_view(self, table_name):
         model = QSqlTableModel(self)
@@ -193,21 +209,15 @@ class MusicLibraryApp(QWidget):
             "JoinDate": datetime.now().strftime("%Y-%m-%d")
         }
 
-        # Add the user directly to the database
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO Users (username, email, JoinDate) VALUES (?, ?, ?)", 
-                           (username, email, new_user["JoinDate"]))
-            conn.commit()
-            conn.close()
+        # Add user directly to the database
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO Users (username, email, join_date) VALUES (?, ?, ?)",
+                       (username, email, new_user["JoinDate"]))
+        conn.commit()
+        conn.close()
 
-            self.refresh_models()
-            print("User added to the database.")
-
-        except Exception as e:
-            print(f"Error adding user: {e}")
-
+        self.refresh_models()
         dialog.accept()
 
     def open_edit_user_dialog(self, view):
@@ -242,8 +252,7 @@ class MusicLibraryApp(QWidget):
 
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("UPDATE Users SET username = ?, email = ? WHERE UserID = ?", 
-                           (new_username, new_email, user_id))
+            cursor.execute("UPDATE Users SET username = ?, email = ? WHERE UserID = ?", (new_username, new_email, user_id))
             conn.commit()
             conn.close()
 
@@ -262,17 +271,6 @@ class MusicLibraryApp(QWidget):
         self.search_combo = QComboBox()
         self.search_table = QTableView()
 
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM Artists")
-            artist_names = [row[0] for row in cursor.fetchall()]
-            conn.close()
-        except Exception as e:
-            print(f"Error fetching artist names: {e}")
-            artist_names = []
-
-        self.search_combo.addItems(artist_names)
         search_button = QPushButton("Search Songs by Artist")
         search_button.clicked.connect(self.load_songs_by_artist)
 
@@ -283,6 +281,10 @@ class MusicLibraryApp(QWidget):
 
         tab.setLayout(layout)
         return tab
+
+    def on_tab_changed(self, index):
+        if index == 4:  # "Search" tab index
+            self.refresh_artist_names()
 
     def load_songs_by_artist(self):
         selected_artist = self.search_combo.currentText()
